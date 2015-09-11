@@ -57,21 +57,21 @@ instance MimeRender PlainText Short where
 instance FromText Short where
   fromText = Just . Short
 
-type Harel = ReqBody '[FormUrlEncoded,JSON] Url :> Post '[PlainText, JSON] Short
-        :<|> Capture "shortId" Short :> Get '[PlainText, JSON] Url
+type Harel = Header "Host" Text :> ReqBody '[FormUrlEncoded,JSON] Url :> Post '[PlainText, JSON] Short
+        :<|> Header "Host" Text :> Capture "shortId" Short :> Get '[PlainText, JSON] Url
 
 harel :: Redis.Connection -> Server Harel
 harel conn = getId :<|> retreiveUrl
   where
     getId (Just host) (Url url) = do
         s <- Short . T.pack <$> lift genShort
-        res <- lift $ Redis.runRedis conn $ Redis.setnx (T.encodeUtf8 . short $ s) (T.encodeUtf8 url)
+        res <- lift $ Redis.runRedis conn $ Redis.hsetnx (T.encodeUtf8 host) (T.encodeUtf8 . short $ s) (T.encodeUtf8 url)
         case res of
           Right True -> return s
           Right False -> getId (Just host) (Url url)
           Left _ -> left err500
     retreiveUrl (Just host) s  = do
-        res <- lift $ Redis.runRedis conn $ Redis.get (T.encodeUtf8 . short $ s)
+        res <- lift $ Redis.runRedis conn $ Redis.hget (T.encodeUtf8 host) (T.encodeUtf8 . short $ s)
         case res of
           Right (Just url) -> return (Url (T.decodeUtf8 url))
           Right Nothing -> left err404
