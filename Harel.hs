@@ -46,20 +46,32 @@ instance FromFormUrlEncoded Url where
 instance MimeRender PlainText Url where
   mimeRender _ = TL.encodeUtf8  . TL.fromStrict . url
 
-type Short = Text
+newtype Short = Short { short :: Text } deriving (Show, Eq, Generic)
 
-type Harel = ReqBody '[FormUrlEncoded, JSON] Url :> Post '[PlainText] Short
+instance FromJSON Short
+instance ToJSON Short
+
+instance MimeRender PlainText Short where
+  mimeRender _ = TL.encodeUtf8  . TL.fromStrict . short
+
+instance FromText Short where
+  fromText = Just . Short
+
+type Harel = ReqBody '[FormUrlEncoded,JSON] Url :> Post '[PlainText, JSON] Short
         :<|> Capture "shortId" Short :> Get '[PlainText, JSON] Url
 
 harel :: Redis.Connection -> Server Harel
 harel conn = getId :<|> retreiveUrl
   where
-    getId (Url url) = do
-        short <- T.pack <$> lift genShort
-        lift $ Redis.runRedis conn $ Redis.set (T.encodeUtf8 short) (T.encodeUtf8 url)
-        return short
-    retreiveUrl short  = do
-        res <- lift $ Redis.runRedis conn $ Redis.get (T.encodeUtf8 short)
+    getId (Just host) (Url url) = do
+        s <- Short . T.pack <$> lift genShort
+        res <- lift $ Redis.runRedis conn $ Redis.setnx (T.encodeUtf8 . short $ s) (T.encodeUtf8 url)
+        case res of
+          Right True -> return s
+          Right False -> getId (Just host) (Url url)
+          Left _ -> left err500
+    retreiveUrl (Just host) s  = do
+        res <- lift $ Redis.runRedis conn $ Redis.get (T.encodeUtf8 . short $ s)
         case res of
           Right (Just url) -> return (Url (T.decodeUtf8 url))
           Right Nothing -> left err404
