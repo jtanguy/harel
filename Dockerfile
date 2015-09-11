@@ -1,4 +1,4 @@
-FROM fpco/stack-build:latest
+FROM fpco/stack-build:lts-3.4
 
 ADD . /opt/harel
 
