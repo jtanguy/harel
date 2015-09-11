@@ -3,6 +3,8 @@ HaReL: Haskell + Redis Url shortener
 
 Actually, it's also powered by Servant
 
+Inspired by Chris allen's [shawty](https://github.com/bitemyapp/shawty).
+
 # Fun fact
 
 Oh and by the way, did you know that
