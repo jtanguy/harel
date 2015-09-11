@@ -1,5 +1,6 @@
-{ mkDerivation, base, hedis, random, servant, servant-lucid
-, servant-server, stdenv
+{ mkDerivation, aeson, base, bytestring, either, hedis, mtl
+, network-uri, random, servant, servant-lucid, servant-server
+, stdenv, text, warp
 }:
 mkDerivation {
   pname = "harel";
@@ -8,7 +9,8 @@ mkDerivation {
   isLibrary = false;
   isExecutable = true;
   executableHaskellDepends = [
-    base hedis random servant servant-lucid servant-server
+    aeson base bytestring either hedis mtl network-uri random servant
+    servant-lucid servant-server text warp
   ];
   homepage = "http://github.com/jtanguy/harel";
   description = "Haskell + Redis Url shortener powered by servant)";
