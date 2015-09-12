@@ -3,6 +3,7 @@
 ## 0.3.0 -- (Current development version)
 
     * Html frontend
+    * Return host as well as the short id
 
 ## 0.2.0 -- Initial release
 

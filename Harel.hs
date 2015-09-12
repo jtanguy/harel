@@ -12,6 +12,7 @@ import           Data.Aeson
 import qualified Data.ByteString.Char8      as B8
 import           Data.Either
 import           Data.Maybe
+import           Data.Monoid
 import           Data.Text                  (Text)
 import qualified Data.Text                  as T
 import qualified Data.Text.Encoding         as T
@@ -19,13 +20,14 @@ import qualified Data.Text.Lazy             as TL
 import qualified Data.Text.Lazy.Encoding    as TL
 import qualified Database.Redis             as Redis
 import           GHC.Generics
+import           Lucid
 import           Network.URI                (parseURI)
 import           Network.Wai.Handler.Warp
+import           Servant
+import           Servant.HTML.Lucid
 import           System.Environment
 import           System.Random              (randomRIO)
 import           Text.Read                  hiding (lift)
-
-import           Servant
 
 alphabet = ['a'..'z']++['A'..'Z']++['0'..'9']
 chooseFrom alph = (alph !!) <$> randomRIO (0,length alph -1)
@@ -57,17 +59,61 @@ instance MimeRender PlainText Short where
 instance FromText Short where
   fromText = Just . Short
 
-type Harel = Header "Host" Text :> ReqBody '[FormUrlEncoded,JSON] Url :> Post '[PlainText, JSON] Short
+data Home = Home
+instance ToHtml Home where
+  toHtml Home = doctypehtml_ $ do
+    head_ $ do
+      title_ "Harel - Url Shortener"
+      meta_ [charset_ "utf-8"]
+      link_ [rel_ "stylesheet", type_ "text/css",  href_ "http://groundfloor.neocities.org/default.css"]
+    body_ $ do
+      header_ $ do
+        h1_ "Harel - Url Shortener"
+        p_ $ do
+          "Powered by "
+          a_ [href_ "http://hackage.haskell.org/package/servant"] "servant"
+          ", "
+          a_ [href_ "http://hackage.haskell.org/package/hedis"] "hedis"
+          " and "
+          a_ [href_ "http://hackage.haskell.org/package/lucid"] "lucid"
+      div_ [ style_ "width: 80%; margin: auto;"] $ do
+        div_ [style_ "display: flex; flex-direction: row; align-items: flex-stretch"] $ do
+          section_ [style_ "flex: 1 1 50%;",  class_ "input"] $ do
+            h2_ "Paste your url here"
+            form_ [action_ "/" , method_ "POST"] $ do
+              input_ [ name_ "url" ]
+              input_ [type_ "submit" , value_ "Shorten"]
+          section_ [style_ "flex: 1 1 50%", class_ "output"] $ do
+            h2_ "Your short id here"
+            pre_ $ samp_ [id_ "short"] ""
+        h2_ "You can also curl or httpie"
+        kbd_ "http :8080 url=\"<your url>\""
+        kbd_ "curl localhost:8080 -d url=\"<your url>\""
+        h2_ "Changelog"
+        p_ "Insert changelog here"
+        term "script" [src_ "//code.jquery.com/jquery-1.11.3.min.js"] ""
+      script_ "$(function(){ \
+        \ $('form').submit(function(){ \
+        \    $.post($(this).attr('action'), $(this).serialize(), function(json) { \
+        \         $('#short').html(json.short);\
+        \             }, 'json');\
+        \                 return false;\
+        \                   });\
+        \                   });"
+  toHtmlRaw = toHtml
+
+type Harel = Get '[HTML] Home
+        :<|> Header "Host" Text :> ReqBody '[FormUrlEncoded,JSON] Url :> Post '[PlainText, JSON] Short
         :<|> Header "Host" Text :> Capture "shortId" Short :> Get '[PlainText, JSON] Url
 
 harel :: Redis.Connection -> Server Harel
-harel conn = getId :<|> retreiveUrl
+harel conn = return Home :<|> getId :<|> retreiveUrl
   where
     getId (Just host) (Url url) = do
-        s <- Short . T.pack <$> lift genShort
-        res <- lift $ Redis.runRedis conn $ Redis.hsetnx (T.encodeUtf8 host) (T.encodeUtf8 . short $ s) (T.encodeUtf8 url)
+        s <- T.pack <$> lift genShort
+        res <- lift $ Redis.runRedis conn $ Redis.hsetnx (T.encodeUtf8 host) (T.encodeUtf8 s) (T.encodeUtf8 url)
         case res of
-          Right True -> return s
+          Right True -> return . Short $ (host <> "/" <> s)
           Right False -> getId (Just host) (Url url)
           Left _ -> left err500
     retreiveUrl (Just host) s  = do
