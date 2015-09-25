@@ -94,10 +94,10 @@ instance ToHtml Home where
         term "script" [src_ "//code.jquery.com/jquery-1.11.3.min.js"] ""
       script_ "$(function(){ \
         \ $('form').submit(function(){ \
+        \    this.preventDefault();\
         \    $.post($(this).attr('action'), $(this).serialize(), function(json) { \
         \         $('#short').html(json.short);\
         \             }, 'json');\
-        \                 return false;\
         \                   });\
         \                   });"
   toHtmlRaw = toHtml
